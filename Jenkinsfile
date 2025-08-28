@@ -8,7 +8,7 @@ pipeline {
         }
         stage('Build Docker Image') {
             steps {
-                sh 'docker -H tcp://host.docker.internal:2375 build -t flask-hello .'
+                sh 'docker build -t flask-hello .'
             }
         }
     }
