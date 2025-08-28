@@ -14,11 +14,13 @@ pipeline {
         stage('Run Persistent Container') {
             steps {
                 sh '''
+                # Prüfen, ob Container schon läuft und ggf. stoppen/entfernen
                 if [ $(docker -H tcp://host.docker.internal:2375 ps -q -f name=flask-test) ]; then
                     docker -H tcp://host.docker.internal:2375 rm -f flask-test
                 fi
+                # Container starten
+                docker -H tcp://host.docker.internal:2375 run -d --name flask-test -p 5000:5000 flask-hello
                 '''
-                sh 'docker -H tcp://host.docker.internal:2375 run -d --name flask-test -p 5000:5000 flask-hello'
             }
         }
         stage('HTTP Test') {
@@ -36,14 +38,15 @@ pipeline {
         }
         stage('Load Test') {
             steps {
-                // Locust im Headless-Modus starten, 1000 User max, 100 pro Sekunde
                 sh '''
-                locust -f locustfile.py --host=http://host.docker.internal:5000 \
-                       --headless -u 1000 -r 100 --run-time 1m --stop-timeout 10
+                # Locust innerhalb des Containers ausführen
+                docker -H tcp://host.docker.internal:2375 exec flask-test \
+                locust -f locustfile.py --host=http://localhost:5000 \
+                --headless -u 1000 -r 100 --run-time 1m --stop-timeout 10
                 '''
             }
         }
-        // Optional: Cleanup nach Load-Test
+        // Cleanup optional, nach erfolgreichem Test
         // stage('Cleanup') {
         //     steps {
         //         sh 'docker -H tcp://host.docker.internal:2375 rm -f flask-test'
