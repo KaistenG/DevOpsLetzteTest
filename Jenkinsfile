@@ -1,5 +1,12 @@
 pipeline {
     agent any
+
+    parameters {
+        string(name: 'LOCUST_USERS', defaultValue: '200', description: 'Anzahl virtueller Benutzer')
+        string(name: 'LOCUST_RATE', defaultValue: '20', description: 'Spawn-Rate (Benutzer pro Sekunde)')
+        string(name: 'LOCUST_TIME', defaultValue: '30s', description: 'Dauer des Lasttests (z.B. 30s, 1m, 2m)')
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -14,11 +21,9 @@ pipeline {
         stage('Run Persistent Container') {
             steps {
                 sh '''
-                # Prüfen, ob Container schon läuft und ggf. stoppen/entfernen
                 if [ $(docker -H tcp://host.docker.internal:2375 ps -q -f name=flask-test) ]; then
                     docker -H tcp://host.docker.internal:2375 rm -f flask-test
                 fi
-                # Container starten
                 docker -H tcp://host.docker.internal:2375 run -d --name flask-test -p 5000:5000 flask-hello
                 '''
             }
@@ -36,14 +41,29 @@ pipeline {
                 '''
             }
         }
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    if (!params.LOCUST_USERS.isInteger() || params.LOCUST_USERS.toInteger() <= 0) {
+                        error "LOCUST_USERS muss eine positive Zahl sein!"
+                    }
+                    if (!params.LOCUST_RATE.isInteger() || params.LOCUST_RATE.toInteger() <= 0) {
+                        error "LOCUST_RATE muss eine positive Zahl sein!"
+                    }
+                    if (!params.LOCUST_TIME.matches(/^\d+[smh]$/)) {
+                        error "LOCUST_TIME muss im Format <Zahl>s/m/h sein, z.B. 30s, 1m, 2h"
+                    }
+                }
+            }
+        }
         stage('Load Test') {
             steps {
-                sh '''
-                # Moderater Lasttest mit Locust
+                sh """
                 docker -H tcp://host.docker.internal:2375 exec flask-test \
                 locust -f locustfile.py --host=http://localhost:5000 \
-                --headless -u 200 -r 20 --run-time 1m --stop-timeout 10
-                '''
+                --headless -u ${params.LOCUST_USERS} -r ${params.LOCUST_RATE} \
+                --run-time ${params.LOCUST_TIME} --stop-timeout 10
+                """
             }
         }
         stage('Cleanup') {
