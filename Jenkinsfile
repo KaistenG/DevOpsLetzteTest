@@ -13,21 +13,24 @@ pipeline {
                 git branch: 'main', url: 'https://github.com/KaistenG/DevOpsLetzteTest.git'
             }
         }
+
         stage('Build Docker Image') {
             steps {
-                sh 'docker -H tcp://host.docker.internal:2375 build -t flask-hello .'
+                sh 'docker -H tcp://host.docker.internal:2375 build -t kaisteng/flask-hello:latest .'
             }
         }
+
         stage('Run Persistent Container') {
             steps {
                 sh '''
                 if [ $(docker -H tcp://host.docker.internal:2375 ps -q -f name=flask-test) ]; then
                     docker -H tcp://host.docker.internal:2375 rm -f flask-test
                 fi
-                docker -H tcp://host.docker.internal:2375 run -d --name flask-test -p 5000:5000 flask-hello
+                docker -H tcp://host.docker.internal:2375 run -d --name flask-test -p 5000:5000 kaisteng/flask-hello:latest
                 '''
             }
         }
+
         stage('HTTP Test') {
             steps {
                 sh 'sleep 5'
@@ -41,6 +44,7 @@ pipeline {
                 '''
             }
         }
+
         stage('Validate Parameters') {
             steps {
                 script {
@@ -56,6 +60,7 @@ pipeline {
                 }
             }
         }
+
         stage('Load Test') {
             steps {
                 sh """
@@ -66,6 +71,17 @@ pipeline {
                 """
             }
         }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh 'kubectl apply -f k8s/deployment.yaml'
+                    sh 'kubectl apply -f k8s/service.yaml'
+                    sh 'kubectl apply -f k8s/hpa.yaml'
+                }
+            }
+        }
+
         stage('Cleanup') {
             steps {
                 sh 'docker -H tcp://host.docker.internal:2375 rm -f flask-test'
