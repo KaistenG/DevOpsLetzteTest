@@ -7,12 +7,11 @@ services:
     restart: unless-stopped
     user: root
     ports:
-      - "8080:8080"   # Jenkins UI
-      - "50000:50000" # Agent communication (für später nützlich)
+      - "8080:8080"
+      - "50000:50000"
     volumes:
       - jenkins_home:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock  # Docker socket mount
-      - /usr/bin/docker:/usr/bin/docker            # Docker CLI in Jenkins verfügbar
+      # kein docker.sock mount nötig
 
 volumes:
   jenkins_home:
