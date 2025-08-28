@@ -21,7 +21,7 @@ pipeline {
 
                 // HTTP-Test: prüfen, ob Container auf / antwortet
                 sh '''
-                STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000)
+                STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://host.docker.internal:5000)
                 if [ "$STATUS" -ne 200 ]; then
                     echo "HTTP-Test fehlgeschlagen: Status $STATUS"
                     exit 1
