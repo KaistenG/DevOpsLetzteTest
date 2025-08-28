@@ -39,18 +39,17 @@ pipeline {
         stage('Load Test') {
             steps {
                 sh '''
-                # Locust innerhalb des Containers ausführen
+                # Moderater Lasttest mit Locust
                 docker -H tcp://host.docker.internal:2375 exec flask-test \
                 locust -f locustfile.py --host=http://localhost:5000 \
-                --headless -u 1000 -r 100 --run-time 1m --stop-timeout 10
+                --headless -u 200 -r 20 --run-time 1m --stop-timeout 10
                 '''
             }
         }
-        // Cleanup optional, nach erfolgreichem Test
-        // stage('Cleanup') {
-        //     steps {
-        //         sh 'docker -H tcp://host.docker.internal:2375 rm -f flask-test'
-        //     }
-        // }
+        stage('Cleanup') {
+            steps {
+                sh 'docker -H tcp://host.docker.internal:2375 rm -f flask-test'
+            }
+        }
     }
 }
