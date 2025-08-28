@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    restart: unless-stopped
+    user: root
+    ports:
+      - "8080:8080"   # Jenkins UI
+      - "50000:50000" # Agent communication (für später nützlich)
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker socket mount
+      - /usr/bin/docker:/usr/bin/docker            # Docker CLI in Jenkins verfügbar
+
+volumes:
+  jenkins_home:
