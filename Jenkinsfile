@@ -61,23 +61,37 @@ pipeline {
             }
         }
 
-        stage('Load Test') {
-            steps {
-                sh """
-                docker -H tcp://host.docker.internal:2375 exec flask-test \
-                locust -f locustfile.py --host=http://localhost:5000 \
-                --headless -u ${params.LOCUST_USERS} -r ${params.LOCUST_RATE} \
-                --run-time ${params.LOCUST_TIME} --stop-timeout 10
-                """
-            }
-        }
-
         stage('Deploy to Kubernetes') {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                     sh 'kubectl apply -f k8s/deployment.yaml'
                     sh 'kubectl apply -f k8s/service.yaml'
                     sh 'kubectl apply -f k8s/hpa.yaml'
+                }
+            }
+        }
+
+        stage('Load Test & HPA Trigger') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    script {
+                        // Load Test starten, der den HPA triggern wird
+                        sh """
+                        docker -H tcp://host.docker.internal:2375 exec flask-test \
+                        locust -f locustfile.py --host=http://flask-service:5000 \
+                        --headless -u ${params.LOCUST_USERS} -r ${params.LOCUST_RATE} \
+                        --run-time ${params.LOCUST_TIME} --stop-timeout 10 &
+                        """
+
+                        // Kurze Wartezeit, damit Last aufgebaut wird
+                        sh 'sleep 5'
+
+                        // HPA in Echtzeit beobachten
+                        sh 'kubectl get hpa flask-hpa -w --no-headers &'
+
+                        // Warten bis Load Test abgeschlossen ist
+                        sh 'wait'
+                    }
                 }
             }
         }
