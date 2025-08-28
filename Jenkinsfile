@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HOST = "tcp://host.docker.internal:2375"
+        DOCKER_IMAGE = "kaisteng/flask-hello:latest"
     }
 
     stages {
@@ -14,7 +14,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t kaisteng/flask-hello:latest .'
+                sh "docker build -t ${DOCKER_IMAGE} ."
             }
         }
 
@@ -32,16 +32,26 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                     script {
-                        // Pod mit Locust erstellen und starten
+                        echo "Starte Load-Test gegen Kubernetes Service..."
+
+                        // Pod für Locust starten (ohne --rm)
                         sh '''
                         kubectl run locust-load-test \
-                            --image=kaisteng/flask-hello:latest \
+                            --image=${DOCKER_IMAGE} \
                             --restart=Never \
-                            --rm -i -- \
-                            locust -f locustfile.py --host=http://flask-service:5000 --headless -u 1000 -r 20 --run-time 30s --stop-timeout 10
+                            --labels=app=locust-test \
+                            --command -- sleep 60
                         '''
-                        // Optional: HPA Status beobachten
-                        sh 'kubectl get hpa flask-hpa -w --no-headers --timeout=40s || true'
+
+                        // Locust Load Test ausführen
+                        sh '''
+                        kubectl exec locust-load-test -- \
+                            locust -f locustfile.py --host=http://flask-service:5000 \
+                            --headless -u 1000 -r 20 --run-time 30s --stop-timeout 10
+                        '''
+
+                        // Pod wieder löschen
+                        sh 'kubectl delete pod locust-load-test --ignore-not-found'
                     }
                 }
             }
@@ -49,10 +59,18 @@ pipeline {
 
         stage('Cleanup') {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                    sh 'kubectl delete pod locust-load-test --ignore-not-found'
-                }
+                echo "Bereinige Ressourcen falls nötig..."
+                // Hier kannst du z.B. Docker-Container lokal entfernen oder andere Aufräumarbeiten machen
             }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline beendet."
+        }
+        failure {
+            echo "Es gab einen Fehler während der Pipeline."
         }
     }
 }
